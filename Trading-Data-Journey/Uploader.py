@@ -48,14 +48,20 @@ df["Trade Entry Time"] = df.apply(lambda row: row["boughtTimestamp"] if row["Sid
 
 # Function to convert duration into total seconds
 def convert_duration(duration):
+    if isinstance(duration, float) or pd.isna(duration):  # Handle NaN or unexpected floats
+        return None  # Return None for invalid/missing values
+    
     match = re.match(r"(?:(\d+)min\s*)?(\d+)sec", duration)
     if match:
         minutes = int(match.group(1)) if match.group(1) else 0
         seconds = int(match.group(2))
         return (minutes * 60) + seconds  # Convert to total seconds
+    
     return None  # If format is wrong, return None
 
-df["duration"] = df["duration"].apply(convert_duration)  # Convert duration to integer seconds
+# Apply the function safely
+df["duration"] = df["duration"].astype(str).apply(convert_duration)  
+
 
 # Categorize Duration into Groups
 def categorize_duration(sec):
