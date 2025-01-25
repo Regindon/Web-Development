@@ -28,10 +28,10 @@ df["symbol"] = df["symbol"].apply(lambda x: x[:-2])
 df["Side"] = df.apply(lambda row: "Long" if row["buyFillId"] < row["sellFillId"] else "Short", axis=1)
 
 # Define contract fee structure
-fee_dict = {"NQ": 4.68/2, "MNQ": 1.54/2, "MYM": 1.54/2}
+fee_dict = {"NQ": 4.68/2, "MNQ": 1.54/2, "MYM": 2.2/2}
 
 # Modify PnL calculation to deduct fees per contract type
-def classify_pnl(pnl, symbol, quantity):
+def classify_pnl(pnl, symbol, quantity, pts):
     numeric_pnl = float(re.sub(r"[\$\(\)]", "", str(pnl)))  # Ensure PnL is a string before regex
     if "(" in str(pnl):
         numeric_pnl = -abs(numeric_pnl)  # Convert losses to negative
@@ -42,18 +42,19 @@ def classify_pnl(pnl, symbol, quantity):
     adjusted_pnl = numeric_pnl - total_fees  # Subtract fees from PnL
 
     # Determine Result (Win/Loss/Breakeven)
-    if adjusted_pnl > 0:
+    if pts > 0:
         return "Win", adjusted_pnl
-    elif adjusted_pnl < 0:
+    elif pts < 0:
         return "Loss", adjusted_pnl
     else:
         return "Breakeven", 0
 
     
-    
+
+df["Pts"] = df.apply(lambda row: 0 if row["sellPrice"] == row["buyPrice"] else (row["sellPrice"] - row["buyPrice"]) if row["sellPrice"] > row["buyPrice"] else -(row["buyPrice"] - row["sellPrice"]), axis=1)
 
 # Apply the modified function to calculate Pnl with fees
-df[["Result", "Pnl"]] = df.apply(lambda row: pd.Series(classify_pnl(row["pnl"], row["symbol"], row["qty"])), axis=1)
+df[["Result", "Pnl"]] = df.apply(lambda row: pd.Series(classify_pnl(row["pnl"], row["symbol"], row["qty"],row["Pts"])), axis=1)
 
 
 # Convert timestamps to datetime
@@ -202,7 +203,7 @@ df["ATR 5M"] = df["ATR 5M"].round(1)
 # 📌 STEP 5: Rename Columns & Save in Correct Order
 # -----------------------------
 
-df = df.rename(columns={"qty": "Quantity", "symbol": "Symbol", "Point": "Pts", "duration": "Duration",
+df = df.rename(columns={"qty": "Quantity", "symbol": "Symbol", "duration": "Duration",
                         "Duration Category": "Drt Category", "buyPrice": "Buy Price", "sellPrice": "Sell Price",
                         "boughtTimestamp": "Bought Time", "soldTimestamp": "Sold Time"})
 
