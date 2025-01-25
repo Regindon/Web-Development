@@ -27,17 +27,34 @@ df["symbol"] = df["symbol"].apply(lambda x: x[:-2])
 # Determine if the trade is Long or Short
 df["Side"] = df.apply(lambda row: "Long" if row["buyFillId"] < row["sellFillId"] else "Short", axis=1)
 
-# Convert P&L to numeric values and classify as Win/Loss/Breakeven
-def classify_pnl(pnl):
-    numeric_pnl = float(re.sub(r"[\$\(\)]", "", pnl))
-    if "(" in pnl:
-        return "Loss", -abs(numeric_pnl)
-    elif numeric_pnl == 0:
-        return "Breakeven", 0
-    else:
-        return "Win", numeric_pnl
+# Define contract fee structure
+fee_dict = {"NQ": 4.68/2, "MNQ": 1.54/2, "MYM": 1.54/2}
 
-df[["Result", "Pnl"]] = df["pnl"].apply(lambda x: pd.Series(classify_pnl(x)))
+# Modify PnL calculation to deduct fees per contract type
+def classify_pnl(pnl, symbol, quantity):
+    numeric_pnl = float(re.sub(r"[\$\(\)]", "", str(pnl)))  # Ensure PnL is a string before regex
+    if "(" in str(pnl):
+        numeric_pnl = -abs(numeric_pnl)  # Convert losses to negative
+
+    # Apply fees based on contract type
+    fee_per_qty = fee_dict.get(symbol[:3], 0)  # Use dictionary lookup
+    total_fees = quantity * fee_per_qty  # Deduct total fees
+    adjusted_pnl = numeric_pnl - total_fees  # Subtract fees from PnL
+
+    # Determine Result (Win/Loss/Breakeven)
+    if adjusted_pnl > 0:
+        return "Win", adjusted_pnl
+    elif adjusted_pnl < 0:
+        return "Loss", adjusted_pnl
+    else:
+        return "Breakeven", 0
+
+    
+    
+
+# Apply the modified function to calculate Pnl with fees
+df[["Result", "Pnl"]] = df.apply(lambda row: pd.Series(classify_pnl(row["pnl"], row["symbol"], row["qty"])), axis=1)
+
 
 # Convert timestamps to datetime
 df["boughtTimestamp"] = pd.to_datetime(df["boughtTimestamp"], format="%m/%d/%Y %H:%M:%S")
@@ -99,9 +116,11 @@ df["Point"] = df.apply(lambda row: -abs(row["sellPrice"] - row["buyPrice"]) if r
 # 📌 STEP 2: Merge Trades Within 5 Seconds (Improved Logic)
 # -----------------------------
 
-def clean_pnl(pnl):
-    """Convert PnL string (e.g., '$40.00' or '($10.00)') to a numeric float value."""
-    return float(re.sub(r"[\$\(\)]", "", pnl)) * (-1 if "(" in pnl else 1)
+def clean_pnl(pnl, symbol, quantity):
+    fee_per_qty = fee_dict.get(symbol[:3], 0)
+    total_fees = quantity * fee_per_qty
+    numeric_pnl = float(re.sub(r"[\$\(\)]", "", str(pnl))) * (-1 if "(" in str(pnl) else 1)
+    return round(numeric_pnl - total_fees, 2)
 
 def get_multiplier(symbol):
     """Return the multiplier based on contract type (NQ, MNQ, MYM)."""
@@ -130,11 +149,11 @@ for _, row in df.iterrows():
             previous_trade["Point"] = max(previous_trade["Point"], row["Point"])
             # ✅ Fix PnL using formula
             multiplier = get_multiplier(previous_trade["symbol"])
-            previous_trade["Pnl"] = previous_trade["qty"] * previous_trade["Point"] * multiplier
+            previous_trade["Pnl"] = previous_trade["qty"] * previous_trade["Point"] * multiplier - ((previous_trade["qty"]+row["qty"]) * fee_dict.get(previous_trade["symbol"][:3], 0))
             continue  # Skip adding the current row as it's merged
 
     # Ensure PnL is converted to numeric before adding to merged trades
-    row["Pnl"] = clean_pnl(row["pnl"])  # ✅ Directly use "Pnl" to prevent later overwrites
+    row["Pnl"] = clean_pnl(row["pnl"], row["symbol"], row["qty"])  # ✅ Directly use "Pnl" to prevent later overwrites
     merged_trades.append(row.to_dict())  # Add trade to list
     previous_trade = merged_trades[-1]  # Update reference to last added trade
 
@@ -193,6 +212,7 @@ df = df[["Quantity", "Symbol", "Side", "Pnl", "Pts", "Result", "Drt Category", "
 
 # ✅ Print Debug Output Before Saving
 print("✅ Final Trade Data Before Saving:")
+df["Pnl"] = df.apply(lambda row: clean_pnl(row["Pnl"], row["Symbol"], row["Quantity"]), axis=1)
 print(df[["Quantity", "Symbol", "Side", "Pnl", "Pts"]].head())  # Check PnL before saving
 
 # Convert "Bought Time" to datetime if it's not already
