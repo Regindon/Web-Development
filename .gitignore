@@ -1,0 +1,13 @@
+# Ignore Google Sheets credentials
+Trading-Data-Journey/google_sheets_credentials.json
+
+# Ignore environment files
+.env
+
+# Ignore compiled files
+*.pyc
+*.class
+
+# Ignore system files
+.DS_Store
+Thumbs.db
