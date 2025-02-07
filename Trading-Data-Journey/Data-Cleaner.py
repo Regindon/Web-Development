@@ -28,7 +28,9 @@ df["symbol"] = df["symbol"].apply(lambda x: x[:-2])
 df["Side"] = df.apply(lambda row: "Long" if row["buyFillId"] < row["sellFillId"] else "Short", axis=1)
 
 # Define contract fee structure
-fee_dict = {"NQ": 4.68/2, "MNQ": 1.54/2, "MYM": 2.2/2}
+# fee_dict = {"NQ": 4.68/2, "MNQ": 1.54/2, "MYM": 2.2/2}
+fee_dict = {"NQ": 4.73/2, "MNQ": 1.57/2, "MYM": 2.2/2}
+
 
 # Modify PnL calculation to deduct fees per contract type
 def classify_pnl(pnl, symbol, quantity, pts):
